@@ -1,5 +1,6 @@
 const db = require('../../config/db');
 const { v4: uuidv4 } = require('uuid');
+const { getChannel } = require("../../config/rabbitmq");
 
 // POST /api/reports/generate
 exports.generateReport = async (req, res) => {
@@ -37,6 +38,19 @@ exports.generateReport = async (req, res) => {
           });
         }
 
+        // 🔥 PUBLISH MESSAGE TO RABBITMQ
+        const channel = getChannel();
+
+        channel.sendToQueue(
+          "report_queue",
+          Buffer.from(JSON.stringify({
+            report_id,
+            report_type,
+            parameters
+          })),
+          { persistent: true }
+        );
+
         return res.status(202).json({
           report_id,
           status: "pending",
@@ -45,6 +59,7 @@ exports.generateReport = async (req, res) => {
       }
     );
   } catch (error) {
+    console.error(error);
     res.status(500).json({
       message: "Internal server error"
     });
@@ -83,6 +98,7 @@ exports.getReportStatus = async (req, res) => {
       });
     });
   } catch (error) {
+    console.error(error);
     res.status(500).json({
       message: "Internal server error"
     });

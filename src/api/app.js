@@ -1,6 +1,8 @@
 require('dotenv').config();
 require('../config/db');
+const { connectRabbitMQ } = require("../config/rabbitmq");
 const express = require('express');
+
 const bodyParser = require('body-parser');
 const cors = require('cors');
 
@@ -28,6 +30,7 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
+connectRabbitMQ();
 
 app.listen(PORT, () => {
   console.log(`API Service running on port ${PORT}`);
