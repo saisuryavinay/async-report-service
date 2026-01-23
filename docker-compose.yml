@@ -3,8 +3,8 @@ services:
     image: rabbitmq:3-management-alpine
     container_name: rabbitmq
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
     environment:
       RABBITMQ_DEFAULT_USER: user
       RABBITMQ_DEFAULT_PASS: password
@@ -13,3 +13,104 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    networks:
+      - report-network
+
+  db:
+    image: mysql:8.0
+    container_name: db
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: reports_db
+    ports:
+      - "3307:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./src/database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - report-network
+
+  api-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: api-service
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DB_HOST: db
+      DB_USER: root
+      DB_PASSWORD: root_password
+      DB_NAME: reports_db
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: user
+      RABBITMQ_PASS: password
+      RABBITMQ_QUEUE: report_queue
+      RABBITMQ_EXCHANGE: report_exchange
+      RABBITMQ_ROUTING_KEY: report_key
+      RABBITMQ_DLQ_QUEUE: report_dlq
+      RABBITMQ_DLQ_EXCHANGE: dlq_exchange
+      RABBITMQ_DLQ_ROUTING_KEY: report_dlq_key
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - report-network
+
+  worker-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: worker-service
+    environment:
+      DB_HOST: db
+      DB_USER: root
+      DB_PASSWORD: root_password
+      DB_NAME: reports_db
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: user
+      RABBITMQ_PASS: password
+      RABBITMQ_QUEUE: report_queue
+      RABBITMQ_EXCHANGE: report_exchange
+      RABBITMQ_ROUTING_KEY: report_key
+      RABBITMQ_DLQ_QUEUE: report_dlq
+      RABBITMQ_DLQ_EXCHANGE: dlq_exchange
+      RABBITMQ_DLQ_ROUTING_KEY: report_dlq_key
+      MAX_RETRIES: 3
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'node.*worker.js' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - report-network
+
+volumes:
+  db_data:
+
+networks:
+  report-network:
+    driver: bridge

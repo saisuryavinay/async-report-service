@@ -1,0 +1,23 @@
+# Multi-stage build for Worker service
+FROM node:20-alpine AS base
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production
+
+# Copy application code
+COPY src/ ./src/
+
+# Install procps for process checking in health check
+RUN apk add --no-cache procps
+
+# Set environment to production
+ENV NODE_ENV=production
+
+# Start the worker service
+CMD ["node", "src/worker/worker.js"]

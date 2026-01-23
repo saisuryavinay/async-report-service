@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node src/api/app.js",
     "dev": "nodemon src/api/app.js",
-    "worker": "node src/worker/worker.js",
+    "worker": "nodemon src/worker/worker.js",
     "test": "jest"
   },
   "repository": {

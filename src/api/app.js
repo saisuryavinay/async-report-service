@@ -1,5 +1,5 @@
 require('dotenv').config();
-require('../config/db');
+const db = require('../config/db');
 const { connectRabbitMQ } = require("../config/rabbitmq");
 const express = require('express');
 
@@ -30,8 +30,27 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-connectRabbitMQ();
 
-app.listen(PORT, () => {
-  console.log(`API Service running on port ${PORT}`);
-});
+// Wait for database connection before starting
+async function startServer() {
+  try {
+    // Wait for services to be ready
+    console.log('⏳ Waiting for services to be ready...');
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
+    // Connect to RabbitMQ with retry
+    await connectRabbitMQ();
+    
+    // Additional wait for database
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    app.listen(PORT, () => {
+      console.log(`✅ API Service running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    setTimeout(startServer, 5000); // Retry
+  }
+}
+
+startServer();
